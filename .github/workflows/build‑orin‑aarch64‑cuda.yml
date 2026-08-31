@@ -1,0 +1,46 @@
+name: build llama.cpp aarch64‑cuda for S11L‑IPD Orin‑X
+on:
+  workflow_dispatch:  # 手动点击触发编译
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: checkout llama.cpp b4231
+        uses: actions/checkout@v4
+        with:
+          ref: b4231
+
+      - name: install host build deps & aarch64 cross‑toolchain
+        run: |
+          sudo apt update
+          sudo apt install -y cmake build-essential git wget
+          sudo apt install -y aarch64-linux-gnu-gcc aarch64-linux-gnu-g++
+
+      - name: install CUDA‑11.4.1 toolkit only (no‑driver)
+        run: |
+          wget https://developer.download.nvidia.com/compute/cuda/11.4.1/local_installers/cuda_11.4.1_470.57.02_linux.run
+          sudo sh cuda_11.4.1_470.57.02_linux.run --silent --no-drm --no-opengl-libs --toolkit --override
+          echo "/usr/local/cuda-11.4/bin" >> $GITHUB_PATH
+          export PATH=/usr/local/cuda-11.4/bin:$PATH
+          nvcc -V
+
+      - name: cmake cross compile for aarch64 sm_87
+        run: |
+          export PATH=/usr/local/cuda-11.4/bin:$PATH
+          cmake -B build_orin \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DGGML_CUDA=ON \
+            -DGGML_CUDA_F16=ON \
+            -DCMAKE_CUDA_ARCHITECTURES=87 \
+            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
+            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
+
+          cmake --build build_orin -j$(nproc)
+
+      - name: upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: llama‑cpp‑orin‑aarch64‑b4231
+          path: |
+            build_orin/main
+            build_orin/server
